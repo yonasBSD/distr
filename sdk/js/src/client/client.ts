@@ -1,6 +1,7 @@
 import {
   Application,
   ApplicationVersion,
+  ApplicationVersionResource,
   DeploymentRequest,
   DeploymentTarget,
   DeploymentTargetAccessResponse,
@@ -78,6 +79,13 @@ export class Client {
       body: formData,
     });
     return this.handleResponse<ApplicationVersion>(response, 'POST', path);
+  }
+
+  public async getApplicationVersionResources(
+    applicationId: string,
+    versionId: string
+  ): Promise<ApplicationVersionResource[]> {
+    return this.get<ApplicationVersionResource[]>(`applications/${applicationId}/versions/${versionId}/resources`);
   }
 
   public async getDeploymentTargets(): Promise<DeploymentTarget[]> {

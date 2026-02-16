@@ -91,6 +91,10 @@ Name of the new version
 
 `string`
 
+###### resources?
+
+[`ApplicationVersionResource`](../interfaces/ApplicationVersionResource.md)[]
+
 ###### templateFile?
 
 `string`
@@ -142,6 +146,10 @@ Creates a new application version for the given Kubernetes application using a H
 ###### linkTemplate?
 
 `string`
+
+###### resources?
+
+[`ApplicationVersionResource`](../interfaces/ApplicationVersionResource.md)[]
 
 ###### templateFile?
 

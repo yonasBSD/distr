@@ -11,9 +11,9 @@ import {
   viewChild,
   ViewChild,
 } from '@angular/core';
-import {FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
+import {FormArray, FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
-import {Application, ApplicationVersion, HelmChartType} from '@distr-sh/distr-sdk';
+import {Application, ApplicationVersion, ApplicationVersionResource, HelmChartType} from '@distr-sh/distr-sdk';
 import {FaIconComponent} from '@fortawesome/angular-fontawesome';
 import {
   faArchive,
@@ -24,9 +24,11 @@ import {
   faEdit,
   faEye,
   faMagnifyingGlass,
+  faPlus,
   faTrash,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import {MarkdownPipe} from 'ngx-markdown';
 import {
   catchError,
   combineLatestWith,
@@ -77,6 +79,7 @@ import {
     SecureImagePipe,
     FormsModule,
     ApplicationVersionDetailModalComponent,
+    MarkdownPipe,
   ],
   templateUrl: './application-detail.component.html',
   animations: [dropdownAnimation],
@@ -152,6 +155,13 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
       compose: new FormControl(''),
       template: new FormControl(''),
     }),
+    resources: new FormArray<
+      FormGroup<{
+        name: FormControl<string>;
+        content: FormControl<string>;
+        visibleToCustomers: FormControl<boolean>;
+      }>
+    >([]),
   });
   newVersionFormLoading = signal(false);
   editForm = new FormGroup({
@@ -172,6 +182,10 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
   protected readonly faArchive = faArchive;
   protected readonly faMagnifyingGlass = faMagnifyingGlass;
   protected readonly faBox = faBox;
+  protected readonly faEye = faEye;
+  protected readonly faPlus = faPlus;
+
+  protected readonly resourcePreviewIndices = signal(new Set<number>());
 
   protected readonly isArchived = isArchived;
   readonly breadcrumbDropdown = signal(false);
@@ -242,29 +256,38 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     if (this.newVersionForm.valid && application) {
       this.newVersionFormLoading.set(true);
       let res;
+      const resources: ApplicationVersionResource[] = this.newVersionForm.controls.resources.controls
+        .map((g) => ({
+          name: g.controls.name.value,
+          content: g.controls.content.value,
+          visibleToCustomers: g.controls.visibleToCustomers.value,
+        }))
+        .filter((r) => r.name && r.content);
+
       if (application.type === 'docker') {
         res = this.applicationService.createApplicationVersionForDocker(
           application,
           {
             name: this.newVersionForm.controls.versionName.value!,
             linkTemplate: this.newVersionForm.controls.linkTemplate.value!,
+            resources,
           },
           this.newVersionForm.controls.docker.controls.compose.value!,
           this.newVersionForm.controls.docker.controls.template.value
         );
       } else {
         const versionFormVal = this.newVersionForm.controls.kubernetes.value;
-        const version = {
-          name: this.newVersionForm.controls.versionName.value!,
-          linkTemplate: this.newVersionForm.controls.linkTemplate.value!,
-          chartType: versionFormVal.chartType!,
-          chartName: versionFormVal.chartName ?? undefined,
-          chartUrl: versionFormVal.chartUrl!,
-          chartVersion: versionFormVal.chartVersion!,
-        };
         res = this.applicationService.createApplicationVersionForKubernetes(
           application,
-          version,
+          {
+            name: this.newVersionForm.controls.versionName.value!,
+            linkTemplate: this.newVersionForm.controls.linkTemplate.value!,
+            chartType: versionFormVal.chartType!,
+            chartName: versionFormVal.chartName ?? undefined,
+            chartUrl: versionFormVal.chartUrl!,
+            chartVersion: versionFormVal.chartVersion!,
+            resources,
+          },
           versionFormVal.baseValues,
           versionFormVal.template
         );
@@ -290,13 +313,18 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     this.isVersionFormExpanded.set(true);
     const val = await this.loadVersionDetails(application, version);
     if (val) {
+      this.newVersionForm.controls.resources.clear();
+      for (const _ of val.resources ?? []) {
+        this.addResource();
+      }
       this.newVersionForm.patchValue(val);
     }
   }
 
   async loadVersionDetails(application: Application, version: ApplicationVersion) {
-    if (application.type === 'kubernetes') {
-      try {
+    try {
+      const resources = await firstValueFrom(this.applicationService.getResources(application.id!, version.id!));
+      if (application.type === 'kubernetes') {
         const template = await firstValueFrom(this.applicationService.getTemplateFile(application.id!, version.id!));
         const baseValues = await firstValueFrom(this.applicationService.getValuesFile(application.id!, version.id!));
         return {
@@ -309,16 +337,9 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
             baseValues,
             template,
           },
+          resources,
         };
-      } catch (e) {
-        const msg = getFormDisplayedError(e);
-        if (msg) {
-          this.toast.error(msg);
-        }
-        return undefined;
-      }
-    } else if (application.type === 'docker') {
-      try {
+      } else if (application.type === 'docker') {
         const template = await firstValueFrom(this.applicationService.getTemplateFile(application.id!, version.id!));
         const compose = await firstValueFrom(this.applicationService.getComposeFile(application.id!, version.id!));
         return {
@@ -327,14 +348,15 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
             compose,
             template,
           },
+          resources,
         };
-      } catch (e) {
-        const msg = getFormDisplayedError(e);
-        if (msg) {
-          this.toast.error(msg);
-        }
-        return undefined;
       }
+    } catch (e) {
+      const msg = getFormDisplayedError(e);
+      if (msg) {
+        this.toast.error(msg);
+      }
+      return undefined;
     }
     return undefined;
   }
@@ -439,6 +461,7 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
         linkTemplate: val.linkTemplate ?? '',
         kubernetes: val.kubernetes,
         docker: val.docker,
+        resources: val.resources ?? [],
       });
       this.versionDetailsModalRef = this.overlay.showModal(this.versionDetailsModal(), {
         positionStrategy: new GlobalPositionStrategy().centerHorizontally().centerVertically(),
@@ -502,5 +525,29 @@ export class ApplicationDetailComponent implements OnInit, OnDestroy {
     );
   }
 
-  protected readonly faEye = faEye;
+  toggleResourcePreview(index: number) {
+    this.resourcePreviewIndices.update((set) => {
+      const next = new Set(set);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }
+
+  addResource() {
+    this.newVersionForm.controls.resources.push(
+      new FormGroup({
+        name: new FormControl('', {nonNullable: true, validators: [Validators.required]}),
+        content: new FormControl('', {nonNullable: true, validators: [Validators.required]}),
+        visibleToCustomers: new FormControl(false, {nonNullable: true}),
+      })
+    );
+  }
+
+  removeResource(index: number) {
+    this.newVersionForm.controls.resources.removeAt(index);
+  }
 }

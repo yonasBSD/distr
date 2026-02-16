@@ -1,6 +1,11 @@
 import {HttpClient, HttpErrorResponse} from '@angular/common/http';
 import {Injectable} from '@angular/core';
-import {Application, ApplicationVersion, PatchApplicationRequest} from '@distr-sh/distr-sdk';
+import {
+  Application,
+  ApplicationVersion,
+  ApplicationVersionResource,
+  PatchApplicationRequest,
+} from '@distr-sh/distr-sdk';
 import {catchError, Observable, of, Subject, switchMap, tap, throwError} from 'rxjs';
 import {DefaultReactiveList, ReactiveList} from './cache';
 import {CrudService} from './interfaces';
@@ -63,6 +68,12 @@ export class ApplicationsService implements CrudService<Application> {
 
   getComposeFile(applicationId: string, versionId: string): Observable<string | null> {
     return this.getFile(applicationId, versionId, 'compose-file');
+  }
+
+  getResources(applicationId: string, versionId: string): Observable<ApplicationVersionResource[]> {
+    return this.httpClient.get<ApplicationVersionResource[]>(
+      `${this.applicationsUrl}/${applicationId}/versions/${versionId}/resources`
+    );
   }
 
   private getFile(applicationId: string, versionId: string, file: string): Observable<string | null> {

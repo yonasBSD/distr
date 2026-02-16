@@ -2,6 +2,7 @@ import semver from 'semver/preload';
 import {
   Application,
   ApplicationVersion,
+  ApplicationVersionResource,
   DeploymentTarget,
   DeploymentTargetAccessResponse,
   DeploymentTargetScope,
@@ -117,11 +118,12 @@ export class DistrService {
       composeFile: string;
       templateFile?: string;
       linkTemplate?: string;
+      resources?: ApplicationVersionResource[];
     }
   ): Promise<ApplicationVersion> {
     return this.client.createApplicationVersion(
       applicationId,
-      {name, linkTemplate: data.linkTemplate ?? ''},
+      {name, linkTemplate: data.linkTemplate ?? '', resources: data.resources},
       {
         composeFile: data.composeFile,
         templateFile: data.templateFile,
@@ -146,6 +148,7 @@ export class DistrService {
       baseValuesFile?: string;
       templateFile?: string;
       linkTemplate?: string;
+      resources?: ApplicationVersionResource[];
     }
   ): Promise<ApplicationVersion> {
     return this.client.createApplicationVersion(
@@ -157,6 +160,7 @@ export class DistrService {
         chartVersion: data.chartVersion,
         chartType: data.chartType,
         chartUrl: data.chartUrl,
+        resources: data.resources,
       },
       {
         baseValuesFile: data.baseValuesFile,
