@@ -19,6 +19,8 @@ import (
 	"github.com/distr-sh/distr/internal/util"
 	dockercommand "github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/flags"
+	composeapi "github.com/docker/compose/v5/pkg/api"
+	"github.com/docker/compose/v5/pkg/compose"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -38,8 +40,9 @@ var (
 			return zapcore.NewTee(c, platformLoggingCore)
 		}),
 	))
-	client    = util.Require(agentclient.NewFromEnv(logger))
-	dockerCli = util.Require(dockercommand.NewDockerCli())
+	client         = util.Require(agentclient.NewFromEnv(logger))
+	dockerCli      = util.Require(dockercommand.NewDockerCli())
+	composeService composeapi.Compose
 )
 
 func init() {
@@ -48,6 +51,7 @@ func init() {
 		logger.Warn("AgentVersionID is not set. self updates will be disabled")
 	}
 	util.Must(dockerCli.Initialize(flags.NewClientOptions()))
+	composeService = util.Require(compose.NewComposeService(dockerCli))
 }
 
 func main() {
