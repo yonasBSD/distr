@@ -54,7 +54,7 @@ export default defineConfig({
       title: 'Distr',
       customCss: ['./src/styles/global.css'],
       editLink: {
-        baseUrl: 'https://github.com/distr-sh/distr.sh/tree/main',
+        baseUrl: 'https://github.com/distr-sh/distr/tree/main/website',
       },
       lastUpdated: true,
       head:
