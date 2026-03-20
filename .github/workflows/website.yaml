@@ -6,13 +6,21 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'website/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'website/**'
 
 permissions:
   id-token: write
   contents: read
+
+defaults:
+  run:
+    working-directory: website
 
 jobs:
   build:
@@ -20,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          sparse-checkout: website
           lfs: true
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
@@ -28,12 +37,12 @@ jobs:
         with:
           node-version: '24'
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache-dependency-path: website/pnpm-lock.yaml
       - uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('website/pnpm-lock.yaml') }}
       - name: Install dependencies
         run: pnpm i
       - name: Lint with prettier
