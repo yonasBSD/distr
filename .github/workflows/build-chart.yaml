@@ -9,6 +9,9 @@ on:
     tags:
       - '*'
   pull_request:
+    paths:
+      - deploy/charts/**
+      - .github/workflows/build-chart.yaml
   workflow_dispatch:
     inputs:
       publish:

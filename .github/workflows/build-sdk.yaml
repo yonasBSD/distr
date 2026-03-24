@@ -9,6 +9,9 @@ on:
     tags:
       - '*'
   pull_request:
+    paths:
+      - sdk/**
+      - .github/workflows/build-sdk.yaml
 
 jobs:
   build:
