@@ -95,9 +95,6 @@ importers:
       marked:
         specifier: ^17.0.0
         version: 17.0.6
-      ngx-toastr:
-        specifier: ^20.0.5
-        version: 20.0.5(@angular/common@21.2.7(@angular/core@21.2.7(@angular/compiler@21.2.7)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@21.2.7(@angular/compiler@21.2.7)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2)
       posthog-js:
         specifier: ^1.187.0
         version: 1.364.7
@@ -2736,13 +2733,6 @@ packages:
   negotiator@1.0.0:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
-
-  ngx-toastr@20.0.5:
-    resolution: {integrity: sha512-JcGu1Cbl+0SovPhxma72ygGeZHtpHWWKwBCyiabb+MSWYtXu/SOwEZ2HTWtZ4wcEYOOiy9tDQZgiEKWXpibpRw==}
-    peerDependencies:
-      '@angular/common': ^21.0.0
-      '@angular/core': ^21.0.0
-      rxjs: ^7.8.2
 
   node-addon-api@6.1.0:
     resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
@@ -5890,13 +5880,6 @@ snapshots:
   nanoid@3.3.11: {}
 
   negotiator@1.0.0: {}
-
-  ngx-toastr@20.0.5(@angular/common@21.2.7(@angular/core@21.2.7(@angular/compiler@21.2.7)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@21.2.7(@angular/compiler@21.2.7)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2):
-    dependencies:
-      '@angular/common': 21.2.7(@angular/core@21.2.7(@angular/compiler@21.2.7)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2)
-      '@angular/core': 21.2.7(@angular/compiler@21.2.7)(rxjs@7.8.2)(zone.js@0.16.1)
-      rxjs: 7.8.2
-      tslib: 2.8.1
 
   node-addon-api@6.1.0:
     optional: true
