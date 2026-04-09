@@ -136,7 +136,7 @@ func createHelloDistrApp(ctx context.Context) (*types.Application, error) {
 
 	version := types.ApplicationVersion{
 		Name:             "0.4.3", // renovate: datasource=github-releases depName=distr-sh/hello-distr
-		LinkTemplate:     "http://{{ .Env.HELLO_DISTR_HOST }}",
+		LinkTemplate:     "{{ .Env.HELLO_DISTR_PROTOCOL }}://{{ .Env.HELLO_DISTR_HOST }}",
 		ComposeFileData:  composeFileData,
 		TemplateFileData: templateFileData,
 	}
@@ -157,9 +157,10 @@ func createHelloDistrDeploymentTarget(ctx context.Context) (*types.DeploymentTar
 	auth := auth.Authentication.Require(ctx)
 	dt := types.DeploymentTargetFull{
 		DeploymentTarget: types.DeploymentTarget{
-			Name:           "hello-distr-tutorial",
-			Type:           types.DeploymentTypeDocker,
-			MetricsEnabled: true,
+			Name:            "hello-distr-tutorial",
+			Type:            types.DeploymentTypeDocker,
+			AutohealEnabled: true,
+			MetricsEnabled:  true,
 		},
 	}
 	if agentVersion, err := db.GetCurrentAgentVersion(ctx); err != nil {
@@ -183,6 +184,7 @@ func createHelloDistrDeploymentTarget(ctx context.Context) (*types.DeploymentTar
 const helloDistrEnvironment = `
 # mandatory values:
 HELLO_DISTR_HOST=localhost
+HELLO_DISTR_PROTOCOL=http
 HELLO_DISTR_DB_NAME=hello-distr
 HELLO_DISTR_DB_USER=distr
 HELLO_DISTR_DB_PASSWORD=distr123
@@ -194,6 +196,7 @@ func createHelloDistrDeploymentAndRevision(ctx context.Context, appVersionID uui
 		DeploymentTargetID:   dtID,
 		EnvFileData:          []byte(helloDistrEnvironment),
 		DockerType:           util.PtrTo(types.DockerTypeCompose),
+		LogsEnabled:          true,
 	}
 	if err := db.CreateDeployment(ctx, deploymentRequest); err != nil {
 		return err
