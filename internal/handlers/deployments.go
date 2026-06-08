@@ -196,6 +196,7 @@ func validateDeploymentRequest(
 	var version *types.ApplicationVersion
 	var target *types.DeploymentTargetFull
 	var secrets []types.SecretWithUpdatedBy
+	var licenseKeys []types.LicenseKey
 
 	org := auth.CurrentOrg()
 	var err error
@@ -241,6 +242,12 @@ func validateDeploymentRequest(
 		return err
 	}
 
+	if licenseKeys, err = db.GetLicenseKeysForDeploymentTarget(ctx, target.DeploymentTarget); err != nil {
+		log.Warn("could not get LicenseKeys", zap.Error(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return err
+	}
+
 	var existingDeployment *types.DeploymentWithLatestRevision
 	if request.DeploymentID != nil {
 		for _, d := range target.Deployments {
@@ -270,31 +277,8 @@ func validateDeploymentRequest(
 		}
 	}
 
-	if org.HasFeature(types.FeatureLicensing) {
-		if request.ApplicationEntitlementID != nil {
-			if entitlement, err = db.GetApplicationEntitlementByID(ctx, *request.ApplicationEntitlementID); err != nil {
-				if errors.Is(err, apierrors.ErrNotFound) {
-					return entitlementNotFoundError(w)
-				} else {
-					log.Error("could not get ApplicationEntitlement", zap.Error(err))
-					sentry.GetHubFromContext(ctx).CaptureException(err)
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-					return err
-				}
-			}
-		} else if auth.CurrentCustomerOrgID() != nil {
-			if entitlements, err := db.GetApplicationEntitlementsWithOrganizationID(ctx, orgId, nil); err != nil {
-				log.Error("could not get ApplicationEntitlement", zap.Error(err))
-				sentry.GetHubFromContext(ctx).CaptureException(err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				return err
-			} else if len(entitlements) > 0 {
-				// entitlement ID is required for customer but optional for vendor
-				return badRequestError(w, "applicationEntitlementId is required")
-			}
-		}
-	} else if request.ApplicationEntitlementID != nil {
-		return badRequestError(w, "unexpected applicationEntitlementId")
+	if entitlement, err = resolveDeploymentEntitlement(ctx, w, request, org); err != nil {
+		return err
 	}
 
 	if err = validateDeploymentRequestEntitlement(
@@ -305,11 +289,58 @@ func validateDeploymentRequest(
 		return err
 	} else if err = validateDeploymentRequestDeploymentTarget(ctx, w, request, target); err != nil {
 		return err
-	} else if err = validateDeploymentRequestValues(w, request, version, secrets); err != nil {
+	} else if err = validateDeploymentRequestValues(ctx, w, request, version, secrets, licenseKeys); err != nil {
 		return err
 	} else {
 		return nil
 	}
+}
+
+func resolveDeploymentEntitlement(
+	ctx context.Context,
+	w http.ResponseWriter,
+	request api.DeploymentRequest,
+	org *types.Organization,
+) (*types.ApplicationEntitlement, error) {
+	if !org.HasFeature(types.FeatureLicensing) {
+		if request.ApplicationEntitlementID != nil {
+			return nil, badRequestError(w, "unexpected applicationEntitlementId")
+		}
+		return nil, nil
+	}
+
+	log := internalctx.GetLogger(ctx)
+	authInfo := auth.Authentication.Require(ctx)
+
+	if request.ApplicationEntitlementID != nil {
+		entitlement, err := db.GetApplicationEntitlementByID(ctx, *request.ApplicationEntitlementID)
+		if err != nil {
+			if errors.Is(err, apierrors.ErrNotFound) {
+				return nil, entitlementNotFoundError(w)
+			}
+			log.Error("could not get ApplicationEntitlement", zap.Error(err))
+			sentry.GetHubFromContext(ctx).CaptureException(err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return nil, err
+		}
+		return entitlement, nil
+	}
+
+	if authInfo.CurrentCustomerOrgID() != nil {
+		entitlements, err := db.GetApplicationEntitlementsWithOrganizationID(ctx, *authInfo.CurrentOrgID(), nil)
+		if err != nil {
+			log.Error("could not get ApplicationEntitlement", zap.Error(err))
+			sentry.GetHubFromContext(ctx).CaptureException(err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return nil, err
+		}
+		if len(entitlements) > 0 {
+			// entitlement ID is required for customer but optional for vendor
+			return nil, badRequestError(w, "applicationEntitlementId is required")
+		}
+	}
+
+	return nil, nil
 }
 
 func badRequestError(w http.ResponseWriter, msg string) error {
@@ -400,22 +431,34 @@ func validateDeploymentRequestDeploymentTarget(
 }
 
 func validateDeploymentRequestValues(
+	ctx context.Context,
 	w http.ResponseWriter,
 	deploymentRequest api.DeploymentRequest,
 	appVersion *types.ApplicationVersion,
 	secrets []types.SecretWithUpdatedBy,
+	licenseKeys []types.LicenseKey,
 ) error {
-	if deploymentValues, err := deploymentvalues.ParsedValuesFileReplaceSecrets(&deploymentRequest, secrets); err != nil {
-		return badRequestError(w, fmt.Sprintf("invalid values: %v", err.Error()))
+	deploymentValues, err := deploymentvalues.ParsedValuesFileReplaceSecrets(&deploymentRequest, secrets, licenseKeys)
+	if err != nil {
+		return deploymentValuesError(ctx, w, err, "invalid values")
 	} else if appVersionValues, err := appVersion.ParsedValuesFile(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return err
 	} else if _, err := util.MergeAllRecursive(appVersionValues, deploymentValues); err != nil {
 		return badRequestError(w, fmt.Sprintf("values cannot be merged with base: %v", err))
-	} else if _, err := deploymentvalues.EnvFileReplaceSecrets(&deploymentRequest, secrets); err != nil {
-		return badRequestError(w, fmt.Sprintf("invalid env file: %v", err.Error()))
+	} else if _, err := deploymentvalues.EnvFileReplaceSecrets(&deploymentRequest, secrets, licenseKeys); err != nil {
+		return deploymentValuesError(ctx, w, err, "invalid env file")
 	}
 	return nil
+}
+
+func deploymentValuesError(ctx context.Context, w http.ResponseWriter, err error, clientMsg string) error {
+	if errors.Is(err, deploymentvalues.ErrInvalidTemplate) {
+		return badRequestError(w, fmt.Sprintf("%s: %v", clientMsg, err.Error()))
+	}
+	sentry.GetHubFromContext(ctx).CaptureException(err)
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	return err
 }
 
 func getDeploymentStatus(w http.ResponseWriter, r *http.Request) {
